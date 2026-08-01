@@ -10,11 +10,18 @@ import ast
 from datetime import datetime
 import time
 
-api_key_1 = "输入GPT密钥"
-base_url_1 = "输入转接地址"
 
-api_key_2 = "输入Claude密钥"
-base_url_2 = "输入转接地址"
+api_key_1 = "local"
+base_url_1 = "http://127.0.0.1:8000/v1"
+
+api_key_2 = "local"
+base_url_2 = "http://127.0.0.1:8000/v1"
+
+# api_key_1 = "输入GPT密钥"
+# base_url_1 = "输入转接地址"
+#
+# api_key_2 = "输入Claude密钥"
+# base_url_2 = "输入转接地址"
 
 GPT_client = openai.Client(api_key=api_key_1, base_url=base_url_1)
 
@@ -57,7 +64,8 @@ def askLLM(messages, max_retries=10, delay=2):
     返回:
     - 模型的响应内容，或在重试次数耗尽后返回None
     """
-    MODEL = "gpt-4-turbo-2024-04-09"
+    MODEL = "deepseek-math-7b-instruct"
+    # MODEL = "gpt-4-turbo-2024-04-09"
     attempt = 0
 
     while attempt < max_retries:
@@ -82,14 +90,16 @@ def actLLM(messages, the_model, max_retries=10, delay=2):
         try:
 
             if the_model == "GPT":
-                MODEL = "gpt-4-turbo-2024-04-09"
+                # MODEL = "gpt-4-turbo-2024-04-09"
+                MODEL = "deepseek-math-7b-instruct"
                 response = GPT_client.chat.completions.create(
                     model=MODEL, messages=messages, temperature=0.7, max_tokens=3000
                 )
                 return response.choices[0].message.content
 
             if the_model == "Claude":
-                MODEL = "claude-3-opus-20240229"
+                # MODEL = "claude-3-opus-20240229"
+                MODEL = "deepseek-math-7b-instruct"
                 response = Claude_client.chat.completions.create(
                     model=MODEL, messages=messages, temperature=0.7, max_tokens=3000
                 )
@@ -122,7 +132,8 @@ def choose_action(list, message, question, the_model):
     query = list[1]
 
     if action == "wolfram_alpha":
-        app_id = '输入你的wolfram_alpha key'
+        app_id = '4GK9YT2E34'
+        # app_id = '输入你的wolfram_alpha key'
         Wolfram = WolframAlphaQuery(app_id)
         response_data = Wolfram.send_query(query)
         if response_data:
