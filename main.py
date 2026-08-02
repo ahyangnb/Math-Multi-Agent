@@ -9,13 +9,17 @@ import re
 import ast
 from datetime import datetime
 import time
+import requests
 
 
-api_key_1 = "local"
-base_url_1 = "http://127.0.0.1:8000/v1"
+GPT_MODEL = os.getenv("GPT_MODEL", "gpt-4-turbo-2024-04-09")
+CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-3-opus-20240229")
 
-api_key_2 = "local"
-base_url_2 = "http://127.0.0.1:8000/v1"
+api_key_1 = os.getenv("AI_ChatGPT_OPENAI_APIKEY", os.getenv("OPENAI_API_KEY", ""))
+base_url_1 = os.getenv("AI_ChatGPT_BASE_URL", os.getenv("OPENAI_BASE_URL", "")).strip() or None
+
+api_key_2 = os.getenv("AI_Claude_APIKEY", os.getenv("ANTHROPIC_API_KEY", ""))
+base_url_2 = os.getenv("AI_Claude_BASE_URL", os.getenv("ANTHROPIC_BASE_URL", "https://api.anthropic.com")).rstrip("/")
 
 # api_key_1 = "输入GPT密钥"
 # base_url_1 = "输入转接地址"
@@ -24,8 +28,6 @@ base_url_2 = "http://127.0.0.1:8000/v1"
 # base_url_2 = "输入转接地址"
 
 GPT_client = openai.Client(api_key=api_key_1, base_url=base_url_1)
-
-Claude_client = OpenAI(api_key=api_key_2, base_url=base_url_2)
 
 question = """
 3、A 与 B 二人进行 “ 抽鬼牌 ”游戏 。游戏开始时， A 手中有n张两两不同的牌 。 B 手上有n+1张牌，其中n张牌与 A 手中的牌相同，另一张为“鬼牌 ”，与其他所有牌都不同。游戏规则为：
@@ -54,6 +56,46 @@ E.对所有的n，A 的胜率都一样
 """
 
 
+def ask_claude(messages, model=CLAUDE_MODEL, temperature=0.7, max_tokens=3000):
+    if not api_key_2:
+        raise ValueError("缺少 AI_Claude_APIKEY 或 ANTHROPIC_API_KEY 环境变量")
+
+    system_parts = []
+    anthropic_messages = []
+    for message in messages:
+        role = message.get("role")
+        content = message.get("content", "")
+        if role == "system":
+            system_parts.append(content)
+        elif role == "assistant":
+            anthropic_messages.append({"role": "assistant", "content": content})
+        else:
+            anthropic_messages.append({"role": "user", "content": content})
+
+    payload = {
+        "model": model,
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+        "messages": anthropic_messages,
+    }
+    if system_parts:
+        payload["system"] = "\n\n".join(system_parts)
+
+    response = requests.post(
+        f"{base_url_2}/v1/messages",
+        headers={
+            "x-api-key": api_key_2,
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json",
+        },
+        json=payload,
+        timeout=120,
+    )
+    response.raise_for_status()
+    data = response.json()
+    return "".join(block.get("text", "") for block in data.get("content", []) if block.get("type") == "text")
+
+
 def askLLM(messages, max_retries=10, delay=2):
     """
     参数:
@@ -64,8 +106,7 @@ def askLLM(messages, max_retries=10, delay=2):
     返回:
     - 模型的响应内容，或在重试次数耗尽后返回None
     """
-    MODEL = "deepseek-math-7b-instruct"
-    # MODEL = "gpt-4-turbo-2024-04-09"
+    MODEL = GPT_MODEL
     attempt = 0
 
     while attempt < max_retries:
@@ -90,20 +131,14 @@ def actLLM(messages, the_model, max_retries=10, delay=2):
         try:
 
             if the_model == "GPT":
-                # MODEL = "gpt-4-turbo-2024-04-09"
-                MODEL = "deepseek-math-7b-instruct"
+                MODEL = GPT_MODEL
                 response = GPT_client.chat.completions.create(
                     model=MODEL, messages=messages, temperature=0.7, max_tokens=3000
                 )
                 return response.choices[0].message.content
 
             if the_model == "Claude":
-                # MODEL = "claude-3-opus-20240229"
-                MODEL = "deepseek-math-7b-instruct"
-                response = Claude_client.chat.completions.create(
-                    model=MODEL, messages=messages, temperature=0.7, max_tokens=3000
-                )
-                return response.choices[0].message.content
+                return ask_claude(messages)
 
         except Exception as e:
             print(f"尝试 {attempt + 1}/{max_retries} 失败: {e}")
@@ -132,7 +167,7 @@ def choose_action(list, message, question, the_model):
     query = list[1]
 
     if action == "wolfram_alpha":
-        app_id = '4GK9YT2E34'
+        app_id = os.getenv("wolfram_alpha_APIKEY", "4GK9YT2E34")
         # app_id = '输入你的wolfram_alpha key'
         Wolfram = WolframAlphaQuery(app_id)
         response_data = Wolfram.send_query(query)
